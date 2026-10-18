@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  body { @apply bg-bg text-text font-sans text-base; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #232326; border-radius: 5px; border: 2px solid #0a0a0b; }
+  ::-webkit-scrollbar-thumb:hover { background: #2e2e33; }
+}
+
+@layer utilities {
+  .tabnum { font-variant-numeric: tabular-nums; }
+}
