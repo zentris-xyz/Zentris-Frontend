@@ -1,7 +1,6 @@
 import { NavLink, Link } from 'react-router-dom'
 import { Settings as SettingsIcon, Wallet } from 'lucide-react'
-import { cn } from '../../lib/utils'
-import { shortenAddress } from '../../lib/utils'
+import { cn, shortenAddress } from '../../lib/utils'
 
 const links = [
   { to: '/', label: 'Overview', end: true },
@@ -9,6 +8,9 @@ const links = [
   { to: '/strategies', label: 'Strategies' },
   { to: '/activity', label: 'Activity' },
 ]
+
+// Temporary — replace with useSupraWallet() when wallet SDK is integrated.
+const CONNECTED_ADDRESS = '0x8a3f5b2c9d1e4f7a6b8c9d0e1f2a3b4c5d6e7f8a'
 
 export function Navbar() {
   return (
@@ -47,7 +49,7 @@ export function Navbar() {
 
           <button className="flex h-8 items-center gap-1.5 rounded border border-line bg-surface px-2.5 text-xs text-text hover:bg-raised">
             <Wallet size={13} className="text-text-muted" />
-            <span className="font-mono">0x8a3f…7f8a</span>
+            <span className="font-mono">{shortenAddress(CONNECTED_ADDRESS)}</span>
           </button>
 
           <NavLink
