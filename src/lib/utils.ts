@@ -26,3 +26,15 @@ export function relativeTime(date: Date): string {
   const days = Math.floor(hours / 24)
   return `${days}d ago`
 }
+
+export function formatTokenAmount(raw: bigint, decimals: number, maxFraction = 4): string {
+  if (raw === 0n) return '0'
+  const s = raw.toString().padStart(decimals + 1, '0')
+  const int = s.slice(0, -decimals)
+  const frac = s.slice(-decimals).slice(0, maxFraction).replace(/0+$/, '')
+  return frac ? `${int}.${frac}` : int
+}
+
+export function toRawAmount(amount: number, decimals: number): bigint {
+  return BigInt(Math.floor(amount * 10 ** decimals))
+}

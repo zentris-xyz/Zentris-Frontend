@@ -4,7 +4,9 @@ import { Plus } from 'lucide-react'
 import { StrategyRow } from '../components/shared/StrategyRow'
 import { Panel } from '../components/ui/Panel'
 import { Button } from '../components/ui/Button'
-import { mockStrategies } from '../lib/mock'
+import { useStrategies } from '../hooks/useSupra'
+import { useWallet } from '../context/WalletContext'
+import { cancelStrategyOnChain } from '../lib/supra'
 import type { StrategyStatus } from '../types'
 import { cn } from '../lib/utils'
 
@@ -16,8 +18,24 @@ const filters: { label: string; value: StrategyStatus | 'all' }[] = [
 ]
 
 export function Strategies() {
+  const { address } = useWallet()
+  const { data: strategies, loading, refresh } = useStrategies()
   const [filter, setFilter] = useState<StrategyStatus | 'all'>('all')
-  const filtered = filter === 'all' ? mockStrategies : mockStrategies.filter((s) => s.status === filter)
+
+  const filtered = (strategies ?? []).filter((s) => filter === 'all' || s.status === filter)
+
+  const handleCancel = async (id: string) => {
+    if (!address) return
+    const strategy = (strategies ?? []).find((s) => s.id === id)
+    if (!strategy) return
+    const baseCoinType = strategy.baseAsset === 'SUPRA'
+      ? '0x1::supra_coin::SupraCoin'
+      : ''
+    const quoteCoinType = import.meta.env.VITE_USDC_COIN_TYPE ?? ''
+    if (!baseCoinType || !quoteCoinType) return
+    await cancelStrategyOnChain({ owner: address, baseCoinType, quoteCoinType })
+    await refresh()
+  }
 
   return (
     <div className="space-y-8">
@@ -27,9 +45,7 @@ export function Strategies() {
           <p className="mt-1 text-sm text-text-muted">Manage your autonomous strategies</p>
         </div>
         <Link to="/strategies/create">
-          <Button>
-            <Plus size={14} /> New
-          </Button>
+          <Button><Plus size={14} /> New</Button>
         </Link>
       </div>
 
@@ -40,13 +56,11 @@ export function Strategies() {
             onClick={() => setFilter(f.value)}
             className={cn(
               'relative px-3 py-2 text-xs transition-colors',
-              filter === f.value ? 'text-text' : 'text-text-muted hover:text-text'
+              filter === f.value ? 'text-text' : 'text-text-muted hover:text-text',
             )}
           >
             {f.label}
-            {filter === f.value && (
-              <span className="absolute inset-x-2 -bottom-px h-px bg-accent" />
-            )}
+            {filter === f.value && <span className="absolute inset-x-2 -bottom-px h-px bg-accent" />}
           </button>
         ))}
       </div>
@@ -61,8 +75,12 @@ export function Strategies() {
           <div />
         </div>
 
-        {filtered.length > 0 ? (
-          filtered.map((s) => <StrategyRow key={s.id} strategy={s} />)
+        {loading ? (
+          <div className="px-4 py-10 text-center text-xs text-text-faint">Loading strategies…</div>
+        ) : filtered.length > 0 ? (
+          filtered.map((s) => (
+            <StrategyRow key={s.id} strategy={s} onCancel={() => void handleCancel(s.id)} />
+          ))
         ) : (
           <div className="px-4 py-16 text-center">
             <p className="text-sm text-text-muted">No strategies match this filter.</p>

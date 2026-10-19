@@ -5,11 +5,20 @@ import { StrategyRow } from '../components/shared/StrategyRow'
 import { Panel } from '../components/ui/Panel'
 import { Button } from '../components/ui/Button'
 import { StatusDot } from '../components/ui/StatusDot'
-import { mockStrategies, mockActivity, portfolioStats } from '../lib/mock'
-import { relativeTime } from '../lib/utils'
+import { useActivity, useAssetBalances, useStrategies } from '../hooks/useSupra'
+import { formatNumber, formatTokenAmount, relativeTime } from '../lib/utils'
 
 export function Dashboard() {
-  const active = mockStrategies.filter((s) => s.status === 'active')
+  const { data: assets } = useAssetBalances()
+  const { data: strategies } = useStrategies()
+  const { data: activity } = useActivity()
+
+  const active = (strategies ?? []).filter((s) => s.status === 'active')
+  const totalValue = (assets ?? []).reduce((sum, a) => sum + a.valueUsd, 0)
+
+  const supra = (assets ?? []).find((a) => a.symbol === 'SUPRA')
+  const walletSupra = supra ? formatTokenAmount(supra.walletBalance, supra.decimals) : '0'
+  const vaultSupra = supra ? formatTokenAmount(supra.vaultBalance, supra.decimals) : '0'
 
   return (
     <div className="space-y-8">
@@ -27,10 +36,10 @@ export function Dashboard() {
 
       <StatStrip
         items={[
-          { label: 'Portfolio', value: `$${portfolioStats.totalValue.toFixed(2)}`, delta: '+2.4% 24h', positive: true },
-          { label: 'Active', value: String(portfolioStats.activeStrategies) },
-          { label: 'Executions', value: String(portfolioStats.totalExecutions), delta: '+3 today', positive: true },
-          { label: 'Est. APY', value: '4.2%', delta: '+0.3%', positive: true },
+          { label: 'Portfolio', value: `$${formatNumber(totalValue)}` },
+          { label: 'SUPRA wallet', value: walletSupra },
+          { label: 'SUPRA vault', value: vaultSupra },
+          { label: 'Active', value: String(active.length) },
         ]}
       />
 
@@ -38,7 +47,10 @@ export function Dashboard() {
         <section className="lg:col-span-2">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-medium text-text">Active strategies</h2>
-            <Link to="/strategies" className="flex items-center gap-1 text-xs text-text-muted hover:text-text">
+            <Link
+              to="/strategies"
+              className="flex items-center gap-1 text-xs text-text-muted hover:text-text"
+            >
               View all <ArrowRight size={12} />
             </Link>
           </div>
@@ -60,13 +72,16 @@ export function Dashboard() {
         <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-medium text-text">Activity</h2>
-            <Link to="/activity" className="flex items-center gap-1 text-xs text-text-muted hover:text-text">
+            <Link
+              to="/activity"
+              className="flex items-center gap-1 text-xs text-text-muted hover:text-text"
+            >
               All <ArrowRight size={12} />
             </Link>
           </div>
           <Panel className="overflow-hidden p-0">
             <ul className="divide-y divide-line">
-              {mockActivity.slice(0, 5).map((a) => (
+              {(activity ?? []).slice(0, 5).map((a) => (
                 <li key={a.id} className="px-4 py-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -74,35 +89,25 @@ export function Dashboard() {
                         <StatusDot status={a.status} />
                         <span className="truncate text-sm text-text">{a.strategyName}</span>
                       </div>
-                      <div className="mt-0.5 text-xs text-text-faint">
-                        {a.amount ? `${a.amount}` : 'Strategy registered'}
-                        {a.price ? <span className="font-mono"> · ${a.price.toFixed(6)}</span> : null}
+                      <div className="mt-0.5 truncate font-mono text-2xs text-text-faint">
+                        {a.txHash}
                       </div>
                     </div>
-                    <span className="shrink-0 text-2xs text-text-faint">{relativeTime(a.timestamp)}</span>
+                    <span className="shrink-0 text-2xs text-text-faint">
+                      {relativeTime(a.timestamp)}
+                    </span>
                   </div>
                 </li>
               ))}
+              {(activity ?? []).length === 0 && (
+                <li className="px-4 py-8 text-center text-xs text-text-faint">
+                  No on-chain activity yet.
+                </li>
+              )}
             </ul>
           </Panel>
         </section>
       </div>
-
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-text">Try natural language</h2>
-        </div>
-        <Panel className="p-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <p className="max-w-xl text-sm text-text-muted">
-              Describe a strategy in plain English. Zentris parses it into on-chain logic and registers it with Supra AutoFi.
-            </p>
-            <Link to="/strategies/create" className="shrink-0">
-              <Button variant="secondary">Open editor</Button>
-            </Link>
-          </div>
-        </Panel>
-      </section>
     </div>
   )
 }

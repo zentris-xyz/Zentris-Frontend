@@ -1,4 +1,5 @@
 export type StrategyStatus = 'active' | 'paused' | 'executed' | 'cancelled'
+export type ActivityStatus = 'executed' | 'cancelled' | 'failed' | 'registered'
 
 export interface Strategy {
   id: string
@@ -15,8 +16,6 @@ export interface Strategy {
   lastExecuted?: Date
 }
 
-export type ActivityStatus = 'executed' | 'cancelled' | 'failed' | 'registered'
-
 export interface Activity {
   id: string
   strategyName: string
@@ -27,11 +26,24 @@ export interface Activity {
   timestamp: Date
 }
 
-export interface Asset {
+export interface AssetBalance {
   symbol: string
   name: string
-  balance: number
-  valueUsd: number
+  coinType: string
   decimals: number
-  price: number
+  priceUsd: number
+  walletBalance: bigint
+  vaultBalance: bigint
+  valueUsd: number
+}
+
+export interface ParsedIntent {
+  action: 'BUY' | 'SELL'
+  baseAsset: string
+  quoteAsset: string
+  quantity: number
+  triggerPrice: number
+  referencePrice: number
+  persistence: string
+  confidence: number
 }
