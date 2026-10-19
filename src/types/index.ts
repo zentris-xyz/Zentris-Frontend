@@ -37,6 +37,16 @@ export interface AssetBalance {
   valueUsd: number
 }
 
+/** Dipakai hanya oleh mock.ts untuk demo tanpa wallet. */
+export interface Asset {
+  symbol: string
+  name: string
+  balance: number
+  valueUsd: number
+  decimals: number
+  price: number
+}
+
 export interface ParsedIntent {
   action: 'BUY' | 'SELL'
   baseAsset: string

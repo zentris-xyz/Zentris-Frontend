@@ -1,6 +1,29 @@
 import type { ParsedIntent } from '../types'
+import { checkApiHealth, fetchParseIntent } from './api'
 
-export function parseIntent(text: string): ParsedIntent {
+export async function parseIntent(text: string): Promise<ParsedIntent> {
+  const healthy = await checkApiHealth()
+
+  if (healthy) {
+    const api = await fetchParseIntent(text)
+    if (api) {
+      return {
+        action: api.action,
+        baseAsset: api.base_asset ?? 'SUPRA',
+        quoteAsset: api.quote_asset ?? 'USDC',
+        quantity: Number(api.quantity ?? 0),
+        triggerPrice: Number(api.trigger_price ?? 0),
+        referencePrice: Number(api.reference_price ?? 0),
+        persistence: api.persistence ?? 'until_filled',
+        confidence: Number(api.confidence ?? 0.85),
+      }
+    }
+  }
+
+  return parseIntentLocal(text)
+}
+
+export function parseIntentLocal(text: string): ParsedIntent {
   const lower = text.toLowerCase()
 
   const quantityMatch = text.match(/(\d[\d,]*)\s*supra/i)
@@ -25,6 +48,6 @@ export function parseIntent(text: string): ParsedIntent {
     triggerPrice,
     referencePrice,
     persistence: 'Continue waiting until trigger is met',
-    confidence: quantity > 0 && triggerPrice > 0 ? 1 : 0,
+    confidence: quantity > 0 && triggerPrice > 0 ? 0.8 : 0.2,
   }
 }

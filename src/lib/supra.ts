@@ -1,3 +1,4 @@
+// @ts-expect-error - supra-l1-sdk types are not published
 import { BCS, HexString, SupraClient } from 'supra-l1-sdk'
 import { getStarKeyProvider } from './starkey'
 import type { Activity, AssetBalance, Strategy } from '../types'
@@ -11,9 +12,9 @@ export const DEBUG = import.meta.env.VITE_DEBUG_SUPRA === 'true'
 
 export const SUPRA_COIN_TYPE = '0x1::supra_coin::SupraCoin'
 
-/* ------------------------------------------------------------------ */
-/*  CoinGecko price with 60s cache                                    */
-/* ------------------------------------------------------------------ */
+/* ---------------------------------------------------------------- */
+/*  CoinGecko price with 60s cache                                  */
+/* ---------------------------------------------------------------- */
 
 const COINGECKO_PRICE_URL =
   'https://api.coingecko.com/api/v3/simple/price?ids=supra&vs_currencies=usd'
@@ -27,12 +28,6 @@ function log(...args: unknown[]) {
   if (DEBUG) console.log('[supra]', ...args)
 }
 
-/**
- * Harga SUPRA/USD dari CoinGecko.
- * Keyless — tidak butuh API key. Rate limit publik ~10–30 req/menit per IP,
- * jadi hasil di-cache 60 detik dan request paralel digabung.
- * Fallback ke API kline Supra jika CoinGecko error / rate-limited.
- */
 export async function fetchSupraPrice(): Promise<number> {
   const now = Date.now()
 
@@ -45,7 +40,6 @@ export async function fetchSupraPrice(): Promise<number> {
   }
 
   priceInFlight = (async () => {
-    // 1) CoinGecko
     try {
       const res = await fetch(COINGECKO_PRICE_URL, {
         headers: { accept: 'application/json' },
@@ -67,7 +61,6 @@ export async function fetchSupraPrice(): Promise<number> {
       log('coingecko fetch failed', e)
     }
 
-    // 2) Fallback: Supra kline REST
     const fallbackPairs = [PRICE_PAIR, 'supra_usdt', 'supra_usd']
 
     for (const pair of fallbackPairs) {
@@ -77,7 +70,9 @@ export async function fetchSupraPrice(): Promise<number> {
         )
         if (!res.ok) continue
 
-        const json = await res.json()
+        const json = (await res.json()) as {
+          instruments?: Array<{ currentPrice?: number | string }>
+        }
         const price = Number(json?.instruments?.[0]?.currentPrice)
 
         if (Number.isFinite(price) && price > 0) {
@@ -90,7 +85,6 @@ export async function fetchSupraPrice(): Promise<number> {
       }
     }
 
-    // 3) Stale cache better than 0
     if (priceCache) {
       log('returning stale price', priceCache.value)
       return priceCache.value
@@ -106,17 +100,19 @@ export async function fetchSupraPrice(): Promise<number> {
   }
 }
 
-/* ------------------------------------------------------------------ */
-/*  Supra client                                                      */
-/* ------------------------------------------------------------------ */
+/* ---------------------------------------------------------------- */
+/*  Supra client                                                    */
+/* ---------------------------------------------------------------- */
 
-let clientPromise: Promise<SupraClient> | null = null
+type SupraClientType = Awaited<ReturnType<typeof SupraClient.init>>
 
-export function getSupraClient(): Promise<SupraClient> {
+let clientPromise: Promise<SupraClientType> | null = null
+
+export function getSupraClient(): Promise<SupraClientType> {
   if (!clientPromise) {
     clientPromise = SupraClient.init(RPC_URL)
   }
-  return clientPromise
+  return clientPromise!   // ← tambah !
 }
 
 function assertModuleAddress() {
@@ -145,15 +141,10 @@ function normalizeBigInt(value: unknown): bigint {
   return 0n
 }
 
-/* ------------------------------------------------------------------ */
-/*  Wallet balance readers                                            */
-/* ------------------------------------------------------------------ */
+/* ---------------------------------------------------------------- */
+/*  Wallet balance readers                                          */
+/* ---------------------------------------------------------------- */
 
-/**
- * Saldo SUPRA di wallet.
- * getAccountSupraCoinBalance (CoinStore + primary FA store),
- * fallback ke view 0x1::coin::balance.
- */
 async function getWalletSupraBalance(owner: string): Promise<bigint> {
   const client = await getSupraClient()
   const address = HexString.ensure(owner)
@@ -220,13 +211,11 @@ async function safeViewU64(
   }
 }
 
-/* ------------------------------------------------------------------ */
-/*  Public read functions                                             */
-/* ------------------------------------------------------------------ */
+/* ---------------------------------------------------------------- */
+/*  Public reads                                                    */
+/* ---------------------------------------------------------------- */
 
 export async function readAssetBalances(owner: string): Promise<AssetBalance[]> {
-  // Saldo wallet tetap dibaca meskipun module address belum di-set.
-
   const supraPrice = await fetchSupraPrice()
 
   const assets = [
@@ -270,16 +259,10 @@ export async function readAssetBalances(owner: string): Promise<AssetBalance[]> 
     const totalRaw = walletBalance + vaultBalance
     const valueUsd = (Number(totalRaw) / 10 ** asset.decimals) * asset.priceUsd
 
-    result.push({
-      ...asset,
-      walletBalance,
-      vaultBalance,
-      valueUsd,
-    })
+    result.push({ ...asset, walletBalance, vaultBalance, valueUsd })
   }
 
   log('readAssetBalances', owner, result)
-
   return result
 }
 
@@ -295,24 +278,38 @@ function symbolFromCoinType(coinType: string): string {
   return parts[parts.length - 1] ?? 'TOKEN'
 }
 
+interface AccountResource {
+  type: string
+  data: Record<string, unknown>
+}
+
+interface RawTx {
+  status?: string
+  txHash: string
+  txConfirmationTime?: number | string
+  transactionInsights?: { function?: string }
+}
+
 export async function readStrategies(owner: string, supraPrice: number): Promise<Strategy[]> {
   if (!MODULE_ADDRESS) return []
 
   const client = await getSupraClient()
 
   try {
-    const { resources } = await client.getAccountResources(HexString.ensure(owner), {
+    const resourcesResult = (await client.getAccountResources(HexString.ensure(owner), {
       count: 100,
-    })
+    })) as { resources: AccountResource[] }
 
-    const strategyResources = resources.filter((r) =>
+    const strategyResources = resourcesResult.resources.filter((r) =>
       r.type.includes('::strategy::LimitBuyStrategy'),
     )
 
     return strategyResources.map((resource, index) => {
-      const data = resource.data as Record<string, string | boolean>
+      const data = resource.data as Record<string, unknown>
       const typeMatch = resource.type.match(/LimitBuyStrategy<(.+)>/)
-      const typeArgs = typeMatch ? typeMatch[1].split(',').map((s) => s.trim()) : []
+      const typeArgs = typeMatch
+        ? typeMatch[1].split(',').map((s: string) => s.trim())
+        : []
       const baseAsset = typeArgs[0] ? symbolFromCoinType(typeArgs[0]) : 'SUPRA'
       const quoteAsset = typeArgs[1] ? symbolFromCoinType(typeArgs[1]) : 'USDC'
 
@@ -346,9 +343,9 @@ export async function readActivity(owner: string): Promise<Activity[]> {
   const client = await getSupraClient()
 
   try {
-    const txs = await client.getAccountTransactionsDetail(HexString.ensure(owner), {
+    const txs = (await client.getAccountTransactionsDetail(HexString.ensure(owner), {
       count: 20,
-    })
+    })) as RawTx[]
 
     return txs.map((tx) => {
       const status =
@@ -358,16 +355,11 @@ export async function readActivity(owner: string): Promise<Activity[]> {
             ? 'failed'
             : 'registered'
 
-      const insights = (tx as unknown as {
-        transactionInsights?: { function?: string }
-      }).transactionInsights
-
-      const confirmation = (tx as unknown as { txConfirmationTime?: number | string })
-        .txConfirmationTime
+      const confirmation = tx.txConfirmationTime
 
       return {
         id: tx.txHash,
-        strategyName: insights?.function ?? 'On-chain transaction',
+        strategyName: tx.transactionInsights?.function ?? 'On-chain transaction',
         status,
         txHash: tx.txHash,
         timestamp: confirmation ? new Date(Number(confirmation) / 1000) : new Date(),
@@ -379,9 +371,9 @@ export async function readActivity(owner: string): Promise<Activity[]> {
   }
 }
 
-/* ------------------------------------------------------------------ */
-/*  Transactions                                                      */
-/* ------------------------------------------------------------------ */
+/* ---------------------------------------------------------------- */
+/*  Transactions                                                    */
+/* ---------------------------------------------------------------- */
 
 async function ensureUserRegistered(owner: string) {
   assertModuleAddress()
@@ -394,7 +386,7 @@ async function ensureUserRegistered(owner: string) {
     )
     return
   } catch {
-    // not registered — continue
+    // not registered
   }
 
   await signAndSend(owner, 'vault', 'register_user', [], [])

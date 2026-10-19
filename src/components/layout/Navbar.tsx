@@ -9,15 +9,16 @@ const links = [
   { to: '/', label: 'Overview', end: true },
   { to: '/vault', label: 'Vault' },
   { to: '/strategies', label: 'Strategies' },
+  { to: '/leaderboard', label: 'Leaderboard' },
   { to: '/activity', label: 'Activity' },
 ]
 
 export function Navbar() {
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-bg/90 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 md:px-6">
-        <div className="flex items-center gap-8">
-          <Link to="/" className="flex items-center gap-2">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 md:px-6">
+        <div className="flex items-center gap-8 min-w-0">
+          <Link to="/" className="flex shrink-0 items-center gap-2">
             <div className="flex h-5 w-5 items-center justify-center rounded bg-accent text-[10px] font-bold text-black">
               Z
             </div>
@@ -33,7 +34,7 @@ export function Navbar() {
                 className={({ isActive }) =>
                   cn(
                     'rounded px-2.5 py-1.5 text-sm transition-colors',
-                    isActive ? 'text-text' : 'text-text-muted hover:text-text'
+                    isActive ? 'text-text' : 'text-text-muted hover:text-text',
                   )
                 }
               >
@@ -43,20 +44,22 @@ export function Navbar() {
           </nav>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <NetworkBadge />
           <WalletMenu />
 
           <NavLink
             to="/settings"
+            title="Settings"
+            aria-label="Settings"
             className={({ isActive }) =>
               cn(
                 'flex h-8 w-8 items-center justify-center rounded border border-line bg-surface hover:bg-raised',
-                isActive ? 'text-text' : 'text-text-muted'
+                isActive ? 'text-text' : 'text-text-muted',
               )
             }
           >
-            <SettingsIcon size={14} />
+            <SettingsIcon size={16} />
           </NavLink>
         </div>
       </div>
@@ -108,7 +111,6 @@ function WalletMenu() {
             {copied ? <Check size={12} /> : <Copy size={12} />}
             {copied ? 'Copied' : 'Copy address'}
           </button>
-
           <button
             onClick={() => {
               void disconnect()

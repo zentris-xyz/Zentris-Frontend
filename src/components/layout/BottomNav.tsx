@@ -1,13 +1,13 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutGrid, Wallet, ListChecks, Activity, Settings as SettingsIcon } from 'lucide-react'
+import { LayoutGrid, Wallet, ListChecks, Trophy, Activity } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
 const items = [
   { to: '/', label: 'Home', icon: LayoutGrid, end: true },
   { to: '/vault', label: 'Vault', icon: Wallet },
   { to: '/strategies', label: 'Strategies', icon: ListChecks },
+  { to: '/leaderboard', label: 'Ranks', icon: Trophy },
   { to: '/activity', label: 'Activity', icon: Activity },
-  { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ]
 
 export function BottomNav() {
@@ -22,7 +22,7 @@ export function BottomNav() {
             className={({ isActive }) =>
               cn(
                 'flex flex-col items-center gap-1 py-2.5 text-[10px] transition-colors',
-                isActive ? 'text-accent' : 'text-text-faint'
+                isActive ? 'text-accent' : 'text-text-faint',
               )
             }
           >

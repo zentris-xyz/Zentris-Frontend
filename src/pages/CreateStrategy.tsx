@@ -6,7 +6,12 @@ import { Button } from '../components/ui/Button'
 import { Textarea } from '../components/ui/Input'
 import { useWallet } from '../context/WalletContext'
 import { parseIntent } from '../lib/intent'
-import { createStrategyOnChain, SUPRA_COIN_TYPE, USDC_COIN_TYPE } from '../lib/supra'
+import {
+  createStrategyOnChain,
+  SUPRA_COIN_TYPE,
+  USDC_COIN_TYPE,
+} from '../lib/supra'
+import { registerStrategyWithBackend } from '../lib/api'
 import { toRawAmount } from '../lib/utils'
 import type { ParsedIntent } from '../types'
 
@@ -27,20 +32,30 @@ export function CreateStrategy() {
   const [parsed, setParsed] = useState<ParsedIntent | null>(null)
   const [error, setError] = useState('')
   const [txHash, setTxHash] = useState('')
+  const [parsing, setParsing] = useState(false)
 
-  const handleParse = () => {
+  const handleParse = async () => {
     if (!intent.trim()) {
       setError('Describe your strategy first.')
       return
     }
-    const result = parseIntent(intent)
-    if (result.quantity <= 0 || result.triggerPrice <= 0) {
-      setError('Could not extract quantity and trigger price. Try an example.')
-      return
-    }
+
     setError('')
-    setParsed(result)
-    setStep('review')
+    setParsing(true)
+
+    try {
+      const result = await parseIntent(intent)
+      if (result.quantity <= 0 || result.triggerPrice <= 0) {
+        setError('Could not extract quantity and trigger price. Try an example.')
+        return
+      }
+      setParsed(result)
+      setStep('review')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to parse intent')
+    } finally {
+      setParsing(false)
+    }
   }
 
   const handleSign = async () => {
@@ -54,8 +69,8 @@ export function CreateStrategy() {
     setError('')
 
     try {
-      const quantityRaw = toRawAmount(parsed.quantity, 8) // SUPRA 8 decimals
-      const triggerRaw = toRawAmount(parsed.triggerPrice, 18) // Oracle 18 decimals
+      const quantityRaw = toRawAmount(parsed.quantity, 8)
+      const triggerRaw = toRawAmount(parsed.triggerPrice, 18)
 
       const result = await createStrategyOnChain({
         owner: address,
@@ -66,6 +81,21 @@ export function CreateStrategy() {
       })
 
       setTxHash(result.txHash)
+
+      // Non-blocking: register with backend so leaderboard can index it.
+      void registerStrategyWithBackend({
+        owner: address,
+        baseAsset: parsed.baseAsset,
+        quoteAsset: parsed.quoteAsset,
+        baseCoinType: SUPRA_COIN_TYPE,
+        quoteCoinType: USDC_COIN_TYPE,
+        quantityRaw: String(quantityRaw),
+        triggerPriceRaw: String(triggerRaw),
+        intent,
+        txHash: result.txHash,
+        referredBy: localStorage.getItem('zentris_ref') ?? undefined,
+      })
+
       setStep('success')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Transaction failed')
@@ -103,6 +133,7 @@ export function CreateStrategy() {
               placeholder="Buy 1,000 SUPRA if price drops 5% from 0.001..."
               value={intent}
               onChange={(e) => setIntent(e.target.value)}
+              disabled={parsing}
             />
             {error && (
               <div className="mt-2 flex items-center gap-1.5 text-xs text-danger">
@@ -112,13 +143,16 @@ export function CreateStrategy() {
           </div>
 
           <div>
-            <div className="mb-2 text-2xs uppercase tracking-wider text-text-faint">Examples</div>
+            <div className="mb-2 text-2xs uppercase tracking-wider text-text-faint">
+              Examples
+            </div>
             <div className="space-y-1.5">
               {examples.map((ex) => (
                 <button
                   key={ex}
                   onClick={() => setIntent(ex)}
-                  className="w-full rounded border border-line bg-surface px-3 py-2 text-left text-xs text-text-muted transition-colors hover:border-line-strong hover:text-text"
+                  disabled={parsing}
+                  className="w-full rounded border border-line bg-surface px-3 py-2 text-left text-xs text-text-muted transition-colors hover:border-line-strong hover:text-text disabled:opacity-50"
                 >
                   {ex}
                 </button>
@@ -126,8 +160,16 @@ export function CreateStrategy() {
             </div>
           </div>
 
-          <Button className="w-full" onClick={handleParse}>
-            <Sparkles size={14} /> Parse intent
+          <Button className="w-full" onClick={() => void handleParse()} disabled={parsing}>
+            {parsing ? (
+              <>
+                <Loader2 size={14} className="animate-spin" /> Parsing…
+              </>
+            ) : (
+              <>
+                <Sparkles size={14} /> Parse intent
+              </>
+            )}
           </Button>
         </div>
       )}
@@ -147,7 +189,11 @@ export function CreateStrategy() {
               <Row label="Quantity" value={parsed.quantity.toLocaleString()} mono />
               <Row label="Pay with" value={parsed.quoteAsset} />
               <Row label="Trigger" value={`$${parsed.triggerPrice.toFixed(6)}`} mono />
-              <Row label="Reference" value={`$${parsed.referencePrice.toFixed(6)}`} mono />
+              <Row
+                label="Reference"
+                value={parsed.referencePrice > 0 ? `$${parsed.referencePrice.toFixed(6)}` : '—'}
+                mono
+              />
               <Row label="Persistence" value={parsed.persistence} />
             </dl>
           </Panel>
@@ -155,10 +201,21 @@ export function CreateStrategy() {
           {error && <p className="text-xs text-danger">{error}</p>}
 
           <div className="flex gap-2">
-            <Button variant="secondary" className="flex-1" onClick={() => { setStep('input'); setParsed(null) }}>
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={() => {
+                setStep('input')
+                setParsed(null)
+              }}
+            >
               Edit
             </Button>
-            <Button className="flex-1" onClick={() => void handleSign()} disabled={!isConnected}>
+            <Button
+              className="flex-1"
+              onClick={() => void handleSign()}
+              disabled={!isConnected}
+            >
               Sign & activate
             </Button>
           </div>
@@ -193,8 +250,17 @@ export function CreateStrategy() {
             </a>
           )}
           <div className="mt-6 flex gap-2">
-            <Button variant="secondary" onClick={() => navigate('/strategies')}>View strategies</Button>
-            <Button onClick={() => { setStep('input'); setIntent(''); setParsed(null); setTxHash('') }}>
+            <Button variant="secondary" onClick={() => navigate('/strategies')}>
+              View strategies
+            </Button>
+            <Button
+              onClick={() => {
+                setStep('input')
+                setIntent('')
+                setParsed(null)
+                setTxHash('')
+              }}
+            >
               Create another
             </Button>
           </div>

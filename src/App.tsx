@@ -4,6 +4,7 @@ import { Dashboard } from './pages/Dashboard'
 import { Vault } from './pages/Vault'
 import { Strategies } from './pages/Strategies'
 import { CreateStrategy } from './pages/CreateStrategy'
+import { Leaderboard } from './pages/Leaderboard'
 import { Activity } from './pages/Activity'
 import { Settings } from './pages/Settings'
 
@@ -16,6 +17,7 @@ export function App() {
           <Route path="vault" element={<Vault />} />
           <Route path="strategies" element={<Strategies />} />
           <Route path="strategies/create" element={<CreateStrategy />} />
+          <Route path="leaderboard" element={<Leaderboard />} />
           <Route path="activity" element={<Activity />} />
           <Route path="settings" element={<Settings />} />
         </Route>
